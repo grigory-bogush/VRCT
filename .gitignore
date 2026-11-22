@@ -21,6 +21,7 @@ error.log
 *.ipynb
 VRCT.zip
 VRCT_cuda.zip
+VRCT_vulkan.zip
 
 .qoder/
 

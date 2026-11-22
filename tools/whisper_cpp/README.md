@@ -43,6 +43,19 @@ The script writes `tools/whisper_cpp/bin/whisper-server.exe` (git-ignored);
 sidecar finds it there directly. `VRCT_WHISPER_CPP_DIR` overrides the search
 path.
 
+**Use the portable zip, not the setup.exe.** The NSIS installer that
+`npm run build` produces only downloads the official `VRCT.zip` from Hugging
+Face, so it never contains whisper.cpp. `tauri build` also does not copy the
+sidecar or `bin/_internal` into `target/release`, so package explicitly:
+
+```cmd
+copy /Y src-tauri\bin\VRCT-sidecar-x86_64-pc-windows-msvc.exe src-tauri\target\release\VRCT-sidecar.exe
+python utils\zip.py --zip_name VRCT_vulkan.zip --dir_paths src-tauri/bin/_internal
+```
+
+Unzip anywhere and run `VRCT.exe`. Don't press VRCT's Update button in such a
+build: it replaces it with the official release.
+
 ## Weight mapping
 
 | VRCT weight | GGML file |

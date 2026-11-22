@@ -115,25 +115,30 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `tauri build` does not copy the sidecar or bin/_internal into
+      # target/release, so utils\zip.py's defaults would produce a zip with
+      # only VRCT.exe. Assemble the portable layout explicitly:
+      #   VRCT.exe, VRCT-sidecar.exe, _internal/ (incl. whisper_cpp/).
+      # The NSIS setup.exe is not uploaded: it is a downloader that installs
+      # the official VRCT.zip from Hugging Face, i.e. without whisper.cpp.
       - name: Package portable zip
         shell: cmd
         run: |
           call .venv\Scripts\activate
-          python utils\zip.py --zip_name VRCT_vulkan.zip
+          copy /Y src-tauri\bin\VRCT-sidecar-x86_64-pc-windows-msvc.exe src-tauri\target\release\VRCT-sidecar.exe
+          python utils\zip.py --zip_name VRCT_vulkan.zip --dir_paths src-tauri/bin/_internal
 
-      - name: Check that whisper-server.exe is bundled
+      - name: Check that the zip contains the app and whisper-server.exe
         shell: pwsh
         run: |
-          $hit = Get-ChildItem -Recurse -Path src-tauri -Filter whisper-server.exe | Select-Object -First 1
-          if (-not $hit) { Write-Host "::error::whisper-server.exe was not bundled"; exit 1 }
-          Write-Host "bundled: $($hit.FullName)"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: VRCT-vulkan-setup
-          path: src-tauri/target/release/bundle/nsis/*.exe
-          if-no-files-found: error
-          retention-days: 14
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead("VRCT_vulkan.zip")
+          $names = $zip.Entries | ForEach-Object { $_.FullName -replace '\\', '/' }
+          $zip.Dispose()
+          foreach ($need in 'VRCT.exe', 'VRCT-sidecar.exe', '_internal/whisper_cpp/whisper-server.exe') {
+            if ($names -notcontains $need) { Write-Host "::error::$need missing from VRCT_vulkan.zip"; exit 1 }
+          }
+          Write-Host "VRCT_vulkan.zip OK ($($names.Count) files)"
 
       - uses: actions/upload-artifact@v4
         with:
