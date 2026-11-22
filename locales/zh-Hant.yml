@@ -120,6 +120,13 @@ config_page:
             type_template_auto: "自動"
             type_template_low: "{{type_name}}（精度較低，處理較快）"
             type_template_high: "{{type_name}}（精度較高，處理較慢）"
+        backend_badge:
+            vulkan: "AMD / Intel GPU"
+            vulkan_title: "透過 Vulkan 在 GPU（AMD、Intel、NVIDIA）上執行。"
+            cuda: "NVIDIA GPU"
+            cpu: "CPU"
+            cpu_cuda: "CPU / NVIDIA"
+            cpu_cuda_title: "在 CPU 上執行，或透過 CUDA 在 NVIDIA GPU 上執行。"
         warning_labels:
             unable_to_use_osc_query: "由於 OSC IP Address 的設定無法接收 OSC 資料，目前無法使用此功能。"
 
@@ -192,6 +199,8 @@ config_page:
         ctranslate2_weight_type:
             label: "選擇離線翻譯模型"
             desc: "你可以選擇用於離線翻譯引擎的翻譯模型。"
+            desc_gpu: "標示為「AMD / Intel GPU」的模型（TranslateGemma）只能在「(Vulkan)」處理裝置上執行，其他模型則在 CPU 或 NVIDIA GPU 上執行。選擇模型時，處理裝置也會自動切換。"
+            license_gemma: "TranslateGemma 依據 Gemma 使用條款（Gemma Terms of Use）提供。"
             small: "基本模型（{{capacity}}）"
             large: "高準確率模型（{{capacity}}）"
         translation_compute_device:
@@ -278,6 +287,7 @@ config_page:
         whisper_weight_type:
             label: "Whisper 模型類型"
             desc: "容量越大的模型精度越高，但會占用更多 CPU/GPU 資源。\n※特別是比 medium 更大的模型，根據 CPU/GPU 效能可能難以使用。"
+            desc_vulkan: "正在 {{device}} 上執行。AMD / Intel GPU（Vulkan）用的模型會與 CPU / NVIDIA 用的模型分開下載。"
         transcription_compute_device:
             label: "AI 語音辨識使用的處理裝置"
         mic_avg_logprob:

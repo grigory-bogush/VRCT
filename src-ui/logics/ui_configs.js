@@ -80,13 +80,19 @@ export const translator_status = [
     { id: "OpenAI_Compatible", label: `OpenAI Compatible`, is_available: false },
 ];
 
+// backend: where the weight runs. "cpu_cuda" = CTranslate2 (CPU / NVIDIA),
+// "vulkan" = GGUF run by llama.cpp on a "(Vulkan)" GPU (AMD / Intel / NVIDIA).
+// Must match getWeightBackend() in src-python/models/translation/translation_llama_cpp.py.
 export const ctranslate2_weight_type_status = [
     { id: "m2m100_418M-ct2-int8", capacity: "418MB"},
     { id: "m2m100_1.2B-ct2-int8", capacity: "1.2GB"},
     { id: "nllb-200-distilled-600M-ct2-int8", capacity: "600MB", is_default: true},
     { id: "nllb-200-distilled-1.3B-ct2-int8", capacity: "1.3GB"},
     { id: "nllb-200-3.3B-ct2-int8", capacity: "3.3GB"},
-].map(item => ({ is_default: false, ...item, is_downloaded: false, progress: null }));
+    { id: "translategemma-4b-it-Q4_K_M", label: "TranslateGemma 4B", capacity: "2.5GB", backend: "vulkan"},
+    { id: "translategemma-4b-it-Q8_0", label: "TranslateGemma 4B (Q8)", capacity: "4.1GB", backend: "vulkan"},
+    { id: "translategemma-12b-it-Q4_K_M", label: "TranslateGemma 12B", capacity: "7.3GB", backend: "vulkan"},
+].map(item => ({ is_default: false, backend: "cpu_cuda", ...item, is_downloaded: false, progress: null }));
 
 export const whisper_weight_type_status = [
     { id: "tiny", capacity: "74.5MB"},

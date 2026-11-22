@@ -5,6 +5,7 @@ import {
 } from "../../_templates/Templates";
 
 import { buildComputeDeviceOptions } from "./computeDeviceOptions";
+import { DeviceLabel } from "../backend_badge/BackendBadge";
 
 export const ComputeDevice = ({
     label,
@@ -17,8 +18,16 @@ export const ComputeDevice = ({
 }) => {
     const { t } = useI18n();
 
-    const { device_labels, selected_device_id, compute_type_labels } = buildComputeDeviceOptions(
+    const { device_labels: device_text_labels, selected_device_id, compute_type_labels } = buildComputeDeviceOptions(
         currentDeviceList.data, currentSelectedDevice.data, t
+    );
+    // Each device gets a "CPU" / "NVIDIA GPU" / "AMD / Intel GPU" badge, so
+    // it's clear which entry is the Vulkan one that AMD cards use.
+    const device_labels = Object.fromEntries(
+        Object.entries(device_text_labels).map(([key, text]) => [
+            key,
+            <DeviceLabel key={key} device={currentDeviceList.data?.[key]} label={text} />,
+        ])
     );
 
     const selectFunction_ComputeDevice = (selected_data) => {

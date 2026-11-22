@@ -18,6 +18,7 @@ import {
 
 import {
     SectionLabelComponent,
+    BackendBadge,
 } from "../_components";
 
 import { ComputeDevice } from "../_components/compute_device/ComputeDevice";
@@ -121,25 +122,38 @@ const CTranslate2WeightType_Box = () => {
     };
 
 
-    const c_translate2_weight_types_object = currentCTranslate2WeightTypeStatus.data.map(item => {
-        return {
-            ...item,
-            label: item.id,
-        };
-    });
+    const { currentSelectableTranslationComputeDeviceList } = useTranslation();
+    // GGUF (TranslateGemma) weights need a "(Vulkan)" device, which the
+    // sidecar only lists when llama-server is bundled and a GPU is present.
+    const has_vulkan_device = Object.values(currentSelectableTranslationComputeDeviceList.data ?? {})
+        .some(device => device?.device === "vulkan");
 
+    const c_translate2_weight_types_object = currentCTranslate2WeightTypeStatus.data
+        .filter(item => item.backend !== "vulkan" || has_vulkan_device)
+        .map(item => {
+            return {
+                ...item,
+                label: item.label ?? item.id,
+                badge: has_vulkan_device ? <BackendBadge backend={item.backend} /> : null,
+            };
+        });
+
+    const desc_lines = [
+        t("config_page.translation.ctranslate2_weight_type.desc", {ctranslate2: "CTranslate2"}),
+    ];
+    if (has_vulkan_device) {
+        desc_lines.push(t("config_page.translation.ctranslate2_weight_type.desc_gpu"));
+        desc_lines.push(t("config_page.translation.ctranslate2_weight_type.license_gemma"));
+    }
 
     return (
         <>
             <DownloadModelsContainer
                 label={t(
                     "config_page.translation.ctranslate2_weight_type.label",
-                    {ctranslate2: "CTranslate2"}
+                    {ctranslate2: has_vulkan_device ? "AI" : "CTranslate2"}
                 )}
-                desc={t(
-                    "config_page.translation.ctranslate2_weight_type.desc",
-                    {ctranslate2: "CTranslate2"}
-                )}
+                desc={desc_lines.join("\n")}
                 name="ctranslate2_weight_type"
                 options={c_translate2_weight_types_object}
                 checked_variable={currentSelectedCTranslate2WeightType}

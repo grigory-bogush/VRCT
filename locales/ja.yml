@@ -120,6 +120,13 @@ config_page:
             type_template_auto: "自動"
             type_template_low: "{{type_name}} （精度が悪く、処理は早い）"
             type_template_high: "{{type_name}} （精度が良く、処理は遅い）"
+        backend_badge:
+            vulkan: "AMD / Intel GPU"
+            vulkan_title: "Vulkan 経由で GPU (AMD・Intel・NVIDIA) 上で動作します。"
+            cuda: "NVIDIA GPU"
+            cpu: "CPU"
+            cpu_cuda: "CPU / NVIDIA"
+            cpu_cuda_title: "CPU、または CUDA 経由で NVIDIA GPU 上で動作します。"
         warning_labels:
             unable_to_use_osc_query: "OSC IP Address の設定によりOSCデータの受信ができないため、現在この機能は使用できません。"
 
@@ -192,6 +199,8 @@ config_page:
         ctranslate2_weight_type:
             label: "{{ctranslate2}} のモデルタイプ"
             desc: "翻訳エンジン「{{ctranslate2}}」で翻訳する際に、使用する翻訳モデルを選択できます。"
+            desc_gpu: "「AMD / Intel GPU」と表示されたモデル (TranslateGemma) は「(Vulkan)」の処理デバイスでのみ動作し、それ以外のモデルは CPU または NVIDIA GPU で動作します。モデルを選ぶと処理デバイスも自動で切り替わります。"
+            license_gemma: "TranslateGemma は Gemma 利用規約 (Gemma Terms of Use) に基づいて提供されています。"
             small: "通常モデル （{{capacity}}）"
             large: "高精度モデル （{{capacity}}）"
         translation_compute_device:
@@ -284,6 +293,7 @@ config_page:
         whisper_weight_type:
             label: "Whisperモデルのタイプ"
             desc: "容量が大きいモデルほど精度は高いですが、その分CPUやGPUを占有します。\n※特にmediumより容量の大きいモデルは、CPU/GPUの性能によっては使用すらも困難です。"
+            desc_vulkan: "{{device}} で動作中です。AMD / Intel GPU (Vulkan) 用のモデルは CPU / NVIDIA 用とは別にダウンロードされます。"
         transcription_compute_device:
             label: "AI音声認識で使用する処理デバイス"
         mic_avg_logprob:

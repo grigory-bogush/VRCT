@@ -120,6 +120,13 @@ config_page:
             type_template_auto: "Automatic"
             type_template_low: "{{type_name}} (Lower accuracy, faster processing)"
             type_template_high: "{{type_name}} (Higher accuracy, slower processing)"
+        backend_badge:
+            vulkan: "AMD / Intel GPU"
+            vulkan_title: "Runs on the GPU through Vulkan (AMD, Intel and NVIDIA graphics cards)."
+            cuda: "NVIDIA GPU"
+            cpu: "CPU"
+            cpu_cuda: "CPU / NVIDIA"
+            cpu_cuda_title: "Runs on the CPU, or on an NVIDIA GPU through CUDA."
         warning_labels:
             unable_to_use_osc_query: "Due to the OSC IP Address settings, OSC data cannot be received, so this feature is currently unavailable."
 
@@ -192,6 +199,8 @@ config_page:
         ctranslate2_weight_type:
             label: "{{ctranslate2}} Model"
             desc: "You can choose the translation model when using the {{ctranslate2}} translation engine."
+            desc_gpu: "Models marked \"AMD / Intel GPU\" (TranslateGemma) run only on a \"(Vulkan)\" processing device; the others run on the CPU or an NVIDIA GPU. Choosing a model switches the processing device to match."
+            license_gemma: "TranslateGemma is provided under the Gemma Terms of Use."
             small: "Basic Model ({{capacity}})"
             large: "High Accuracy Model ({{capacity}})"
         translation_compute_device:
@@ -284,6 +293,7 @@ config_page:
         whisper_weight_type:
             label: "Whisper Model"
             desc: "Larger models have higher accuracy, but they also consume more CPU or GPU resources.\nEspecially for models larger than medium, it may be difficult or even impossible to use them depending on the performance of your CPU/GPU."
+            desc_vulkan: "Running on {{device}}. Models for the AMD / Intel GPU (Vulkan) are downloaded separately from the CPU / NVIDIA ones."
         transcription_compute_device:
             label: "Processing Device Used For AI transcription"
         mic_avg_logprob:

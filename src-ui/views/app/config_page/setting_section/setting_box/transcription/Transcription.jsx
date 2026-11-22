@@ -17,6 +17,7 @@ import {
 
 import {
     SectionLabelComponent,
+    BackendBadge,
 } from "../_components";
 
 import { ComputeDevice } from "../_components/compute_device/ComputeDevice";
@@ -252,21 +253,42 @@ const WhisperWeightType_Box = () => {
         downloadWhisperWeightTypeStatus(id);
     };
 
+    // Every Whisper size exists for both backends (faster-whisper on CPU/CUDA,
+    // whisper.cpp on "(Vulkan)" GPUs), but as different files: the list and
+    // its "downloaded" flags follow the selected transcription device.
+    const {
+        currentSelectableTranscriptionComputeDeviceList,
+        currentSelectedTranscriptionComputeDevice,
+    } = useTranscription();
+    const has_vulkan_device = Object.values(currentSelectableTranscriptionComputeDeviceList.data ?? {})
+        .some(device => device?.device === "vulkan");
+    const selected_device = currentSelectedTranscriptionComputeDevice.data;
+    const is_vulkan = selected_device?.device === "vulkan";
+    const weight_backend = is_vulkan ? "vulkan" : "cpu_cuda";
+
     const whisper_weight_types = currentWhisperWeightTypeStatus.data.map(item => {
         return {
             ...item,
             label: item.id,
+            badge: has_vulkan_device ? <BackendBadge backend={weight_backend} /> : null,
         };
     });
+
+    const desc_lines = [
+        t("config_page.transcription.whisper_weight_type.desc", { translator: t("main_page.translator") }),
+    ];
+    if (is_vulkan) {
+        desc_lines.push(t(
+            "config_page.transcription.whisper_weight_type.desc_vulkan",
+            { device: String(selected_device?.device_name ?? "").replace(/ \(Vulkan\)$/, "") }
+        ));
+    }
 
     return (
         <>
             <DownloadModelsContainer
                 label={t("config_page.transcription.whisper_weight_type.label")}
-                desc={t(
-                    "config_page.transcription.whisper_weight_type.desc",
-                    { translator: t("main_page.translator") }
-                )}
+                desc={desc_lines.join("\n")}
                 name="whisper_weight_type"
                 options={whisper_weight_types}
                 checked_variable={currentSelectedWhisperWeightType}

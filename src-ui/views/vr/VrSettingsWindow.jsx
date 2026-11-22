@@ -283,9 +283,15 @@ const TranscriptionSettings = ({ t, openPicker }) => {
 const TranslationSettings = ({ t, openPicker }) => {
     const tl = useTranslation();
     // CTranslate2 はダウンロード済みのモデルだけ選べる (ダウンロードはデスクトップで行う)
+    // GGUF weights ("vulkan") run on an AMD / Intel GPU; picking one also
+    // moves the processing device to that GPU (the sidecar keeps them aligned).
     const weights = (tl.currentCTranslate2WeightTypeStatus.data ?? [])
         .filter(w => w.is_downloaded)
-        .map(w => ({ id: w.id, label: `${w.id} (${w.capacity})` }));
+        .map(w => ({
+            id: w.id,
+            label: `${w.label ?? w.id} (${w.capacity})`
+                + (w.backend === "vulkan" ? ` · ${t("config_page.common.backend_badge.vulkan")}` : ""),
+        }));
     const ct2_label = t("config_page.translation.ctranslate2_weight_type.label", { ctranslate2: "CTranslate2" });
     const selected_weight = tl.currentSelectedCTranslate2WeightType;
     return (

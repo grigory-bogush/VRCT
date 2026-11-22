@@ -39,6 +39,7 @@ export const RadioButton = (props) => {
                                 />
                                 <div className={styles.label_heading_wrapper}>
                                     <p className={styles.radio_button_label}>{option.label}</p>
+                                    {option.badge}
                                     {option.capacity && (
                                         <span className={styles.capacity_label}>{option.capacity}</span>
                                     )}
