@@ -37,6 +37,12 @@ except Exception:  # pragma: no cover - optional runtime
     whisper_models = {}  # type: ignore
 
 try:
+    from models.transcription.transcription_whisper_cpp import getVulkanComputeDeviceList
+except Exception:  # pragma: no cover - optional runtime
+    def getVulkanComputeDeviceList(root=None):  # type: ignore
+        return []
+
+try:
     from models.ocr.ocr_languages import SELECTABLE_LANGUAGES as ocr_selectable_languages
 except Exception:  # pragma: no cover - optional runtime
     ocr_selectable_languages = ()  # type: ignore
@@ -698,6 +704,14 @@ def _compute_device_validator(val, inst):
             return copy.deepcopy(val)
     return None
 
+def _transcription_compute_device_validator(val, inst):
+    if not isinstance(val, dict):
+        return None
+    for dev in inst.SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST:
+        if dev == val:
+            return copy.deepcopy(val)
+    return None
+
 def _allowed_in_populated(list_attr_name: str):
     def _inner(value, inst):
         try:
@@ -843,6 +857,10 @@ class Config:
     SELECTABLE_OCR_SOURCE_LANGUAGE_LIST = ManagedProperty('SELECTABLE_OCR_SOURCE_LANGUAGE_LIST', readonly=True, serialize=False)
     COMPUTE_MODE = ManagedProperty('COMPUTE_MODE', readonly=True, serialize=False)
     SELECTABLE_COMPUTE_DEVICE_LIST = ManagedProperty('SELECTABLE_COMPUTE_DEVICE_LIST', readonly=True, serialize=False)
+    # Transcription-only device list: SELECTABLE_COMPUTE_DEVICE_LIST (CPU/CUDA,
+    # shared with CTranslate2 translation) plus whisper.cpp "(Vulkan)" GPUs,
+    # which only the local Whisper engine can use.
+    SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST = ManagedProperty('SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST', readonly=True, serialize=False)
     SEND_MESSAGE_BUTTON_TYPE_LIST = ManagedProperty('SEND_MESSAGE_BUTTON_TYPE_LIST', readonly=True, serialize=False)
 
     # Read Write
@@ -1068,7 +1086,7 @@ class Config:
     SELECTED_MIC_DEVICE = ValidatedProperty('SELECTED_MIC_DEVICE', _mic_device_validator)
     SELECTED_SPEAKER_DEVICE = ValidatedProperty('SELECTED_SPEAKER_DEVICE', _speaker_device_validator)
     SELECTED_TRANSLATION_COMPUTE_DEVICE = ValidatedProperty('SELECTED_TRANSLATION_COMPUTE_DEVICE', _compute_device_validator)
-    SELECTED_TRANSCRIPTION_COMPUTE_DEVICE = ValidatedProperty('SELECTED_TRANSCRIPTION_COMPUTE_DEVICE', _compute_device_validator)
+    SELECTED_TRANSCRIPTION_COMPUTE_DEVICE = ValidatedProperty('SELECTED_TRANSCRIPTION_COMPUTE_DEVICE', _transcription_compute_device_validator)
 
     # -- Clipboard control ---
     ENABLE_CLIPBOARD = ManagedProperty('ENABLE_CLIPBOARD', type_=bool)
@@ -1122,6 +1140,9 @@ class Config:
         # OCRエンジンが読める言語だけ (VRCTが翻訳できる言語の全てではない)。
         self._SELECTABLE_OCR_SOURCE_LANGUAGE_LIST = list(ocr_selectable_languages)
         self._SELECTABLE_COMPUTE_DEVICE_LIST = getComputeDeviceList()
+        self._SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST = (
+            list(self._SELECTABLE_COMPUTE_DEVICE_LIST) + getVulkanComputeDeviceList(self._PATH_LOCAL)
+        )
         self._COMPUTE_MODE = "cuda" if any(
             device.get("device") == "cuda" for device in self._SELECTABLE_COMPUTE_DEVICE_LIST
         ) else "cpu"

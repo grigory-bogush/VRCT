@@ -40,6 +40,7 @@ from models.translation.translation_languages import translation_lang
 from models.transcription.transcription_languages import transcription_lang
 from models.translation.translation_utils import checkCTranslate2Weight, downloadCTranslate2Weight, downloadCTranslate2Tokenizer, backwardCompatibleRenameWeightsDir
 from models.transcription.transcription_whisper import checkWhisperWeight, downloadWhisperWeight
+from models.transcription.transcription_whisper_cpp import checkWhisperCppWeight, downloadWhisperCppWeight
 from models.transcription.transcription_openai_compatible import checkTranscriptionApiKey, getAvailableTranscriptionModels
 from models.transcription.transcription_deepgram import (
     checkDeepgramApiKey,
@@ -1084,10 +1085,22 @@ class Model:
         self.ensure_initialized()
         self.translator.setChangedTranslatorParameters(is_changed)
 
+    @staticmethod
+    def isWhisperCppTranscriptionDevice() -> bool:
+        """True when the local Whisper engine runs on whisper.cpp (a
+        "(Vulkan)" transcription compute device) instead of faster-whisper.
+        The two backends use different weight files (GGML vs CTranslate2),
+        so weight checks/downloads follow the selected device."""
+        return config.SELECTED_TRANSCRIPTION_COMPUTE_DEVICE.get("device") == "vulkan"
+
     def checkTranscriptionWhisperModelWeight(self, weight_type:str):
+        if self.isWhisperCppTranscriptionDevice():
+            return checkWhisperCppWeight(config.PATH_LOCAL, weight_type)
         return checkWhisperWeight(config.PATH_LOCAL, weight_type)
 
     def downloadWhisperModelWeight(self, weight_type, callback=None, end_callback=None):
+        if self.isWhisperCppTranscriptionDevice():
+            return downloadWhisperCppWeight(config.PATH_LOCAL, weight_type, callback, end_callback)
         return downloadWhisperWeight(config.PATH_LOCAL, weight_type, callback, end_callback)
 
     def authenticationTranscriptionApiKey(self, api_key: str, base_url: str) -> bool:

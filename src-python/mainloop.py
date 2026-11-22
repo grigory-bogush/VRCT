@@ -97,6 +97,7 @@ run_mapping = {
     "download_progress_whisper_weight":"/run/download_progress_whisper_weight",
     "downloaded_whisper_weight":"/run/downloaded_whisper_weight",
     "error_whisper_weight":"/run/error_whisper_weight",
+    "selectable_whisper_weight_type_dict":"/get/data/selectable_whisper_weight_type_dict",
 
     "selected_mic_host":"/run/selected_mic_host",
     "selected_mic_device":"/run/selected_mic_device",
@@ -293,7 +294,7 @@ mapping = {
     "/get/data/selectable_translation_compute_device_list": {"status": True, "variable":controller.getComputeDeviceList},
     "/get/data/selected_translation_compute_device": {"status": True, "variable":controller.getSelectedTranslationComputeDevice},
     "/set/data/selected_translation_compute_device": {"status": True, "variable":controller.setSelectedTranslationComputeDevice},
-    "/get/data/selectable_transcription_compute_device_list": {"status": True, "variable":controller.getComputeDeviceList},
+    "/get/data/selectable_transcription_compute_device_list": {"status": True, "variable":controller.getTranscriptionComputeDeviceList},
     "/get/data/selected_transcription_compute_device": {"status": True, "variable":controller.getSelectedTranscriptionComputeDevice},
     "/set/data/selected_transcription_compute_device": {"status": True, "variable":controller.setSelectedTranscriptionComputeDevice},
 

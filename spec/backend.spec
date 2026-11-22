@@ -9,6 +9,13 @@ import os
 _use_upx = os.environ.get("VRCT_PYINSTALLER_UPX") == "1"
 
 
+# whisper.cpp (Vulkan) runtime for the local Whisper engine on AMD/Intel GPUs.
+# Optional: built by tools/whisper_cpp/build_whisper_cpp_vulkan.ps1. When it is
+# absent the build still succeeds and "(Vulkan)" devices simply don't appear.
+_whisper_cpp_bin = os.path.join(SPECPATH, '..', 'tools', 'whisper_cpp', 'bin')
+_whisper_cpp_datas = [(_whisper_cpp_bin, 'whisper_cpp/')] if os.path.isfile(os.path.join(_whisper_cpp_bin, 'whisper-server.exe')) else []
+
+
 a = Analysis(
     ['..\\src-python\\mainloop.py'],
     pathex=[],
@@ -24,7 +31,7 @@ a = Analysis(
         ('./../.venv/Lib/site-packages/faster_whisper', 'faster_whisper/'),
         ('./../.venv/Lib/site-packages/hf_xet', 'hf_xet/'),
         ('./../.venv/Lib/site-packages/rapidocr', 'rapidocr/'),
-        ],
+        ] + _whisper_cpp_datas,
     hiddenimports=['telemetry_keys', 'faster_whisper.vad', 'models.transcription.audio_pipeline', 'rapidocr', 'cv2', 'models.ocr', 'windows_capture'],
     hookspath=[],
     hooksconfig={},

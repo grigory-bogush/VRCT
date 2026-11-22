@@ -177,6 +177,7 @@ _SIMPLE_CONFIG_GETTERS = {
     "getVersion": "VERSION",
     "getComputeMode": "COMPUTE_MODE",
     "getComputeDeviceList": "SELECTABLE_COMPUTE_DEVICE_LIST",
+    "getTranscriptionComputeDeviceList": "SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST",
     "getSelectedTranslationComputeDevice": "SELECTED_TRANSLATION_COMPUTE_DEVICE",
     "getSelectableCtranslate2WeightTypeDict": "SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_DICT",
     "getSelectedTranscriptionComputeDevice": "SELECTED_TRANSCRIPTION_COMPUTE_DEVICE",
@@ -947,6 +948,11 @@ class Controller:
         def downloaded(self) -> None:
             if model.checkTranscriptionWhisperModelWeight(self.weight_type) is True:
                 config.SELECTABLE_WHISPER_WEIGHT_TYPE_DICT[self.weight_type] = True
+                if self.weight_type == config.WHISPER_WEIGHT_TYPE:
+                    # e.g. after switching to a Vulkan device the GGML weight
+                    # is fetched on demand; once it lands the Whisper engine
+                    # is usable again without restarting VRCT.
+                    config.SELECTABLE_TRANSCRIPTION_ENGINE_STATUS["Whisper"] = True
 
                 self.run(
                     200,
@@ -1415,10 +1421,26 @@ class Controller:
 
     def setSelectedTranscriptionComputeDevice(self, device:str, *args, **kwargs) -> dict:
         printLog("setSelectedTranscriptionComputeDevice", device)
+        was_whisper_cpp = model.isWhisperCppTranscriptionDevice()
         config.SELECTED_TRANSCRIPTION_COMPUTE_DEVICE = device
         config.SELECTED_TRANSCRIPTION_COMPUTE_TYPE = "auto"
         self.run(200, self.run_mapping["selected_transcription_compute_type"], config.SELECTED_TRANSCRIPTION_COMPUTE_TYPE)
+        if model.isWhisperCppTranscriptionDevice() != was_whisper_cpp:
+            # Switching between faster-whisper (CPU/CUDA) and whisper.cpp
+            # (Vulkan) changes which weight files the Whisper engine uses
+            # (CTranslate2 vs GGML), so the per-size "downloaded" flags, the
+            # Whisper engine availability and the UI all have to follow.
+            self.refreshWhisperWeightStatusForBackend()
         return {"status":200,"result":config.SELECTED_TRANSCRIPTION_COMPUTE_DEVICE}
+
+    def refreshWhisperWeightStatusForBackend(self) -> None:
+        for weight_type in list(config.SELECTABLE_WHISPER_WEIGHT_TYPE_DICT.keys()):
+            config.SELECTABLE_WHISPER_WEIGHT_TYPE_DICT[weight_type] = model.checkTranscriptionWhisperModelWeight(weight_type)
+        whisper_available = bool(config.SELECTABLE_WHISPER_WEIGHT_TYPE_DICT.get(config.WHISPER_WEIGHT_TYPE))
+        self._whisper_available_cache = whisper_available
+        config.SELECTABLE_TRANSCRIPTION_ENGINE_STATUS["Whisper"] = whisper_available
+        self.run(200, self.run_mapping["selectable_whisper_weight_type_dict"], config.SELECTABLE_WHISPER_WEIGHT_TYPE_DICT)
+        self.updateTranscriptionEngine()
 
     @staticmethod
     def getSelectableWhisperWeightTypeDict(*args, **kwargs) -> dict:

@@ -33,6 +33,11 @@ from speech_recognition.exceptions import UnknownValueError
 from datetime import datetime, timedelta
 from pyaudiowpatch import get_sample_size, paInt16
 from .transcription_whisper import getWhisperModel, checkWhisperWeight
+from .transcription_whisper_cpp import (
+    WhisperCppProvider,
+    acquireWhisperCppServer,
+    checkWhisperCppWeight,
+)
 from .transcription_providers import (
     GoogleProvider,
     LocalWhisperProvider,
@@ -152,6 +157,10 @@ class AudioTranscriber:
         self.whisper_model = None
         self.whisper_weight_type = whisper_weight_type
         self._api_provider: Optional[OpenAICompatibleTranscriptionProvider] = None
+        # Local "Whisper" engine running on whisper.cpp (Vulkan) instead of
+        # faster-whisper/CTranslate2. Set only when the transcription compute
+        # device is a "(Vulkan)" entry; see transcription_whisper_cpp.py.
+        self._whisper_cpp_provider: Optional[WhisperCppProvider] = None
         self.audio_sources: Dict[str, Any] = {
             "sample_rate": source.SAMPLE_RATE,
             "sample_width": source.SAMPLE_WIDTH,
@@ -162,7 +171,12 @@ class AudioTranscriber:
             "process_data_func": self.processSpeakerData if speaker else self.processMicData,
         }
 
-        if transcription_engine == "Whisper" and checkWhisperWeight(root, whisper_weight_type) is True:
+        if transcription_engine == "Whisper" and device == "vulkan":
+            if checkWhisperCppWeight(root, whisper_weight_type) is True:
+                server = acquireWhisperCppServer(root, whisper_weight_type, device_index)
+                self._whisper_cpp_provider = WhisperCppProvider(server)
+                self.transcription_engine = "Whisper"
+        elif transcription_engine == "Whisper" and checkWhisperWeight(root, whisper_weight_type) is True:
             self.whisper_model = getWhisperModel(
                 root, whisper_weight_type, device=device, device_index=device_index, compute_type=compute_type
             )
@@ -199,6 +213,8 @@ class AudioTranscriber:
         のではなく、呼び出しの都度その場で解決する。
         """
         if self.transcription_engine == "Whisper":
+            if self._whisper_cpp_provider is not None:
+                return self._whisper_cpp_provider
             if self.whisper_model is None:
                 return None
             return LocalWhisperProvider(self.whisper_model)

@@ -1,0 +1,143 @@
+name: Build VRCT (whisper.cpp Vulkan)
+
+# Unsigned test build of the CPU edition with the whisper.cpp Vulkan runtime
+# bundled, so the local Whisper engine can run on AMD/Intel GPUs.
+# Not a release: no version/channel checks, no telemetry keys (telemetry is
+# disabled without them), no Hugging Face / GitHub Release upload.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/whisper-cpp-vulkan'
+    paths:
+      - 'src-python/**'
+      - 'src-ui/**'
+      - 'src-tauri/**'
+      - 'spec/**'
+      - 'tools/whisper_cpp/**'
+      - 'requirements*.txt'
+      - 'package*.json'
+      - '.github/workflows/build-whisper-cpp-vulkan.yml'
+
+jobs:
+  whisper-server:
+    name: whisper-server.exe (Vulkan)
+    runs-on: windows-latest
+    env:
+      VULKAN_VERSION: 1.4.357.0
+      WHISPER_CPP_VERSION: v1.9.5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache whisper-server build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: tools/whisper_cpp/bin
+          key: whisper-server-vulkan-${{ env.WHISPER_CPP_VERSION }}-${{ env.VULKAN_VERSION }}-${{ hashFiles('tools/whisper_cpp/build_whisper_cpp_vulkan.ps1') }}
+
+      - name: Install Vulkan SDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
+
+      - name: Build whisper-server.exe
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: tools\whisper_cpp\build_whisper_cpp_vulkan.ps1 -Version $env:WHISPER_CPP_VERSION
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whisper-server-vulkan
+          path: tools/whisper_cpp/bin
+          if-no-files-found: error
+
+  vrct:
+    name: VRCT (CPU + whisper.cpp Vulkan)
+    needs: whisper-server
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: whisper-server-vulkan
+          path: tools/whisper_cpp/bin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.15.0'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: npm install
+        run: npm install
+
+      # CPU venv only (bat\install.bat also builds the multi-GB CUDA venv,
+      # which this build doesn't need).
+      - name: Python environment (CPU)
+        shell: cmd
+        run: |
+          python -m venv .venv
+          call .venv\Scripts\activate
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir --force-reinstall --no-deps rapidocr==3.9.2
+          pip install --no-cache-dir --force-reinstall --no-deps windows-capture==2.0.1
+          python -X utf8 tools\fetch_ocr_models.py
+          pip install pytest tqdm
+
+      - name: Unit tests (whisper.cpp backend)
+        shell: cmd
+        run: |
+          call .venv\Scripts\activate
+          python -m pytest -q src-python/test/test_transcription_whisper_cpp.py src-python/test/test_controller_whisper_cpp_device.py
+
+      # NOTICE.md: the chat-bubble OCR model may be used while developing and
+      # testing a fork, but must not be shipped in a fork's own release. Keep
+      # it only when this repository is private (the artifacts are then only
+      # visible to its owner); public forks build without it, and VRCT's OCR
+      # bubble detection is simply unavailable in that build.
+      - name: Drop OCR bubble model in public forks
+        if: ${{ github.event.repository.private == false && github.repository != 'misyaguziya/VRCT' }}
+        shell: pwsh
+        run: Remove-Item -Force src-python/models/ocr/onnx/chatbox_yolox_tiny.onnx
+
+      - name: Build
+        run: npm run build
+
+      - name: Package portable zip
+        shell: cmd
+        run: |
+          call .venv\Scripts\activate
+          python utils\zip.py --zip_name VRCT_vulkan.zip
+
+      - name: Check that whisper-server.exe is bundled
+        shell: pwsh
+        run: |
+          $hit = Get-ChildItem -Recurse -Path src-tauri -Filter whisper-server.exe | Select-Object -First 1
+          if (-not $hit) { Write-Host "::error::whisper-server.exe was not bundled"; exit 1 }
+          Write-Host "bundled: $($hit.FullName)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VRCT-vulkan-setup
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VRCT-vulkan-portable
+          path: VRCT_vulkan.zip
+          if-no-files-found: error
+          retention-days: 14
