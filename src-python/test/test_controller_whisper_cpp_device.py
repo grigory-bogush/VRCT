@@ -21,6 +21,7 @@ _VULKAN = {"device": "vulkan", "device_index": 0, "device_name": "AMD Radeon RX 
 class _ConfigSnapshot:
     _NAMES = (
         "_SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST",
+        "_SELECTABLE_TRANSLATION_COMPUTE_DEVICE_LIST",
         "_SELECTED_TRANSCRIPTION_COMPUTE_DEVICE",
         "_SELECTED_TRANSCRIPTION_COMPUTE_TYPE",
         "_SELECTABLE_WHISPER_WEIGHT_TYPE_DICT",
@@ -46,9 +47,13 @@ class TranscriptionDeviceListTests(unittest.TestCase):
     def test_translation_list_never_contains_vulkan(self) -> None:
         self.assertFalse(any(d.get("device") == "vulkan" for d in config.SELECTABLE_COMPUTE_DEVICE_LIST))
 
-    def test_vulkan_device_is_accepted_only_for_transcription(self) -> None:
+    def test_vulkan_transcription_device_needs_its_own_list(self) -> None:
+        # Translation has its own Vulkan entries only when llama-server is
+        # bundled (test_translation_llama_cpp.py); without them a
+        # transcription-only Vulkan device must not leak into translation.
         with _ConfigSnapshot():
             config._SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST = list(config.SELECTABLE_COMPUTE_DEVICE_LIST) + [_VULKAN]
+            config._SELECTABLE_TRANSLATION_COMPUTE_DEVICE_LIST = list(config.SELECTABLE_COMPUTE_DEVICE_LIST)
             translation_before = config.SELECTED_TRANSLATION_COMPUTE_DEVICE
 
             config.SELECTED_TRANSCRIPTION_COMPUTE_DEVICE = _VULKAN

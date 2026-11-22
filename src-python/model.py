@@ -41,6 +41,7 @@ from models.transcription.transcription_languages import transcription_lang
 from models.translation.translation_utils import checkCTranslate2Weight, downloadCTranslate2Weight, downloadCTranslate2Tokenizer, backwardCompatibleRenameWeightsDir
 from models.transcription.transcription_whisper import checkWhisperWeight, downloadWhisperWeight
 from models.transcription.transcription_whisper_cpp import checkWhisperCppWeight, downloadWhisperCppWeight
+from models.translation.translation_llama_cpp import checkLlamaCppWeight, downloadLlamaCppWeight, isLlamaCppWeight
 from models.transcription.transcription_openai_compatible import checkTranscriptionApiKey, getAvailableTranscriptionModels
 from models.transcription.transcription_deepgram import (
     checkDeepgramApiKey,
@@ -1055,6 +1056,10 @@ class Model:
         return backwardCompatibleRenameWeightsDir(config.PATH_LOCAL)
         
     def checkTranslatorCTranslate2ModelWeight(self, weight_type:str):
+        # The local AI engine has two kinds of weights: CTranslate2 ones
+        # (CPU/CUDA) and GGUF ones run by llama.cpp on "(Vulkan)" GPUs.
+        if isLlamaCppWeight(weight_type):
+            return checkLlamaCppWeight(config.PATH_LOCAL, weight_type)
         return checkCTranslate2Weight(config.PATH_LOCAL, weight_type)
 
     def changeTranslatorCTranslate2Model(self):
@@ -1068,9 +1073,13 @@ class Model:
             )
 
     def downloadCTranslate2ModelWeight(self, weight_type, callback=None, end_callback=None):
+        if isLlamaCppWeight(weight_type):
+            return downloadLlamaCppWeight(config.PATH_LOCAL, weight_type, callback, end_callback)
         return downloadCTranslate2Weight(config.PATH_LOCAL, weight_type, callback, end_callback)
 
     def downloadCTranslate2ModelTokenizer(self, weight_type):
+        if isLlamaCppWeight(weight_type):
+            return True  # GGUF files embed their tokenizer
         return downloadCTranslate2Tokenizer(config.PATH_LOCAL, weight_type)
 
     def isLoadedCTranslate2Model(self):

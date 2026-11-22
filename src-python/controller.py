@@ -14,6 +14,13 @@ from utils import removeLog, printLog, errorLogging, isConnectedNetwork, isValid
 from errors import ErrorCode, OcrStartError, VRCTError
 from models.transcription.transcription_openai_compatible import TRANSCRIPTION_MODEL_KEYWORDS, TRANSCRIPTION_API_ENGINES
 from models.translation.translation_providers import TRANSLATION_PROVIDER_REGISTRY, CONNECTION_PROVIDER_REGISTRY
+from models.translation.translation_llama_cpp import (
+    BACKEND_LLAMA_CPP,
+    DEFAULT_LLAMA_CPP_WEIGHT,
+    getDeviceBackend,
+    getWeightBackend,
+    isWeightCompatibleWithDevice,
+)
 from models.message_pipeline import MessageDirectionSpec, MIC_MESSAGE_SPEC, SPEAKER_MESSAGE_SPEC, CHAT_MESSAGE_SPEC, OCR_MESSAGE_SPEC
 from models.overlay.overlay_tooltip import validate_tooltip
 from models.overlay.overlay import PANEL_ANCHORS, computeVrLayout, clampPanelSize, mirrorHandPosition
@@ -177,6 +184,7 @@ _SIMPLE_CONFIG_GETTERS = {
     "getVersion": "VERSION",
     "getComputeMode": "COMPUTE_MODE",
     "getComputeDeviceList": "SELECTABLE_COMPUTE_DEVICE_LIST",
+    "getTranslationComputeDeviceList": "SELECTABLE_TRANSLATION_COMPUTE_DEVICE_LIST",
     "getTranscriptionComputeDeviceList": "SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST",
     "getSelectedTranslationComputeDevice": "SELECTED_TRANSLATION_COMPUTE_DEVICE",
     "getSelectableCtranslate2WeightTypeDict": "SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_DICT",
@@ -910,6 +918,11 @@ class Controller:
         def downloaded(self) -> None:
             if model.checkTranslatorCTranslate2ModelWeight(self.weight_type) is True:
                 config.SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_DICT[self.weight_type] = True
+                if self.weight_type == config.CTRANSLATE2_WEIGHT_TYPE:
+                    # e.g. after switching to a Vulkan device the GGUF weight
+                    # is fetched on demand; once it lands the local AI engine
+                    # is usable again without restarting VRCT.
+                    config.SELECTABLE_TRANSLATION_ENGINE_STATUS["CTranslate2"] = True
 
                 self.run(
                     200,
@@ -1415,7 +1428,61 @@ class Controller:
         config.SELECTED_TRANSLATION_COMPUTE_TYPE = "auto"
         self.run(200, self.run_mapping["selected_translation_compute_type"], config.SELECTED_TRANSLATION_COMPUTE_TYPE)
         model.setChangedTranslatorParameters(True)
+        if self.alignTranslationWeightWithDevice():
+            # e.g. CPU -> "(Vulkan)": the CTranslate2 weight can't run there,
+            # so the local AI engine switched to a GGUF weight (or back).
+            self.refreshAiTranslationWeightStatus()
         return {"status":200,"result":config.SELECTED_TRANSLATION_COMPUTE_DEVICE}
+
+    @staticmethod
+    def _pickTranslationWeightForBackend(backend: str) -> Optional[str]:
+        """Weight to switch to when the device changes backend: the first
+        downloaded weight of that backend, else its default."""
+        candidates = [w for w in config.SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_LIST if getWeightBackend(w) == backend]
+        if not candidates:
+            return None
+        for weight_type in candidates:
+            if model.checkTranslatorCTranslate2ModelWeight(weight_type) is True:
+                return weight_type
+        default = DEFAULT_LLAMA_CPP_WEIGHT if backend == BACKEND_LLAMA_CPP else "nllb-200-distilled-600M-ct2-int8"
+        return default if default in candidates else candidates[0]
+
+    @staticmethod
+    def _pickTranslationDeviceForBackend(backend: str) -> Optional[dict]:
+        for device in config.SELECTABLE_TRANSLATION_COMPUTE_DEVICE_LIST:
+            if getDeviceBackend(device) == backend:
+                return device
+        return None
+
+    def alignTranslationWeightWithDevice(self) -> bool:
+        """Keep the local AI engine's weight runnable on the selected
+        translation device (GGUF weights only run on "(Vulkan)" devices,
+        CTranslate2 weights only on CPU/CUDA). The device wins. Returns True
+        when the weight was changed."""
+        device = config.SELECTED_TRANSLATION_COMPUTE_DEVICE
+        if isWeightCompatibleWithDevice(config.CTRANSLATE2_WEIGHT_TYPE, device):
+            return False
+        weight_type = self._pickTranslationWeightForBackend(getDeviceBackend(device))
+        if weight_type is None:
+            return False
+        printLog("Switch AI translation weight to match device", f"{config.CTRANSLATE2_WEIGHT_TYPE} -> {weight_type}")
+        config.CTRANSLATE2_WEIGHT_TYPE = weight_type
+        model.setChangedTranslatorParameters(True)
+        return True
+
+    def refreshAiTranslationWeightStatus(self) -> None:
+        """Re-check the selected AI translation weight after it changed and
+        push weight, device and engine availability to the UI."""
+        weight_type = config.CTRANSLATE2_WEIGHT_TYPE
+        available = model.checkTranslatorCTranslate2ModelWeight(weight_type) is True
+        config.SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_DICT[weight_type] = available
+        self._ctranslate2_available_cache = available
+        config.SELECTABLE_TRANSLATION_ENGINE_STATUS["CTranslate2"] = available
+        self.run(200, self.run_mapping["selected_ctranslate2_weight_type"], weight_type)
+        self.run(200, self.run_mapping["selected_translation_compute_device"], config.SELECTED_TRANSLATION_COMPUTE_DEVICE)
+        self.run(200, self.run_mapping["selected_translation_compute_type"], config.SELECTED_TRANSLATION_COMPUTE_TYPE)
+        self.run(200, self.run_mapping["selectable_ctranslate2_weight_type_dict"], config.SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_DICT)
+        self.updateTranslationEngineAndEngineList()
 
 
 
@@ -3232,10 +3299,20 @@ class Controller:
         return self._setTranslationEngineModel("Ollama", data)
 
 
-    @staticmethod
-    def setCtranslate2WeightType(data, *args, **kwargs) -> dict:
+    def setCtranslate2WeightType(self, data, *args, **kwargs) -> dict:
         config.CTRANSLATE2_WEIGHT_TYPE = str(data)
         model.setChangedTranslatorParameters(True)
+        weight_type = config.CTRANSLATE2_WEIGHT_TYPE
+        if not isWeightCompatibleWithDevice(weight_type, config.SELECTED_TRANSLATION_COMPUTE_DEVICE):
+            # The UI only offers weights that fit the selected device, but
+            # e.g. the VR settings window may not: move the device instead
+            # (a GGUF weight -> the first "(Vulkan)" GPU, and back).
+            device = self._pickTranslationDeviceForBackend(getWeightBackend(weight_type))
+            if device is not None:
+                printLog("Switch translation device to match AI weight", device.get("device_name"))
+                config.SELECTED_TRANSLATION_COMPUTE_DEVICE = device
+                config.SELECTED_TRANSLATION_COMPUTE_TYPE = "auto"
+        self.refreshAiTranslationWeightStatus()
         return {"status":200, "result":config.CTRANSLATE2_WEIGHT_TYPE}
 
 
@@ -4775,6 +4852,11 @@ class Controller:
         printLog(f"Connected Network: {connected_network}")
 
         self.initializationProgress(1)
+
+        # A saved GGUF (Vulkan) AI translation weight can't run if the saved
+        # Vulkan device is gone (config validation fell back to CPU), and vice
+        # versa: fix the weight before it is checked/downloaded below.
+        self.alignTranslationWeightWithDevice()
 
         # Download weights
         # 事前チェックの結果（Noneは「未実施」、True/Falseは「ロード検証済み」）。

@@ -27,6 +27,13 @@ except Exception:  # pragma: no cover - optional runtime
     ctranslate2_weights = {}  # type: ignore
 
 try:
+    from models.translation.translation_llama_cpp import llama_cpp_weights, getTranslationVulkanComputeDeviceList
+except Exception:  # pragma: no cover - optional runtime
+    llama_cpp_weights = {}  # type: ignore
+    def getTranslationVulkanComputeDeviceList(root=None):  # type: ignore
+        return []
+
+try:
     from models.transcription.transcription_languages import transcription_lang
 except Exception:  # pragma: no cover - optional runtime
     transcription_lang = {}  # type: ignore
@@ -704,6 +711,14 @@ def _compute_device_validator(val, inst):
             return copy.deepcopy(val)
     return None
 
+def _translation_compute_device_validator(val, inst):
+    if not isinstance(val, dict):
+        return None
+    for dev in inst.SELECTABLE_TRANSLATION_COMPUTE_DEVICE_LIST:
+        if dev == val:
+            return copy.deepcopy(val)
+    return None
+
 def _transcription_compute_device_validator(val, inst):
     if not isinstance(val, dict):
         return None
@@ -861,6 +876,10 @@ class Config:
     # shared with CTranslate2 translation) plus whisper.cpp "(Vulkan)" GPUs,
     # which only the local Whisper engine can use.
     SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST = ManagedProperty('SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST', readonly=True, serialize=False)
+    # Translation-only device list: SELECTABLE_COMPUTE_DEVICE_LIST plus
+    # llama.cpp "(Vulkan)" GPUs, which run the GGUF (TranslateGemma) weights
+    # of the local AI engine (models/translation/translation_llama_cpp.py).
+    SELECTABLE_TRANSLATION_COMPUTE_DEVICE_LIST = ManagedProperty('SELECTABLE_TRANSLATION_COMPUTE_DEVICE_LIST', readonly=True, serialize=False)
     SEND_MESSAGE_BUTTON_TYPE_LIST = ManagedProperty('SEND_MESSAGE_BUTTON_TYPE_LIST', readonly=True, serialize=False)
 
     # Read Write
@@ -1085,7 +1104,7 @@ class Config:
     SELECTED_MIC_HOST = ValidatedProperty('SELECTED_MIC_HOST', _mic_host_validator)
     SELECTED_MIC_DEVICE = ValidatedProperty('SELECTED_MIC_DEVICE', _mic_device_validator)
     SELECTED_SPEAKER_DEVICE = ValidatedProperty('SELECTED_SPEAKER_DEVICE', _speaker_device_validator)
-    SELECTED_TRANSLATION_COMPUTE_DEVICE = ValidatedProperty('SELECTED_TRANSLATION_COMPUTE_DEVICE', _compute_device_validator)
+    SELECTED_TRANSLATION_COMPUTE_DEVICE = ValidatedProperty('SELECTED_TRANSLATION_COMPUTE_DEVICE', _translation_compute_device_validator)
     SELECTED_TRANSCRIPTION_COMPUTE_DEVICE = ValidatedProperty('SELECTED_TRANSCRIPTION_COMPUTE_DEVICE', _transcription_compute_device_validator)
 
     # -- Clipboard control ---
@@ -1126,7 +1145,13 @@ class Config:
 
         self._SELECTABLE_TAB_NO_LIST = ["1", "2", "3"]
         # these external mappings may be empty dicts if the optional modules failed to import
-        self._SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_LIST = getattr(ctranslate2_weights, 'keys', lambda: [])()
+        # CTranslate2 weights (CPU/CUDA) followed by GGUF weights (llama.cpp on
+        # "(Vulkan)" GPUs). Which ones are usable depends on the selected
+        # translation compute device (translation_llama_cpp.getWeightBackend).
+        self._SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_LIST = (
+            list(getattr(ctranslate2_weights, 'keys', lambda: [])())
+            + list(getattr(llama_cpp_weights, 'keys', lambda: [])())
+        )
         self._SELECTABLE_WHISPER_WEIGHT_TYPE_LIST = getattr(whisper_models, 'keys', lambda: [])()
         translation_lang = loadTranslationLanguages(self.PATH_LOCAL)
         self._SELECTABLE_TRANSLATION_ENGINE_LIST = getattr(translation_lang, 'keys', lambda: [])()
@@ -1142,6 +1167,9 @@ class Config:
         self._SELECTABLE_COMPUTE_DEVICE_LIST = getComputeDeviceList()
         self._SELECTABLE_TRANSCRIPTION_COMPUTE_DEVICE_LIST = (
             list(self._SELECTABLE_COMPUTE_DEVICE_LIST) + getVulkanComputeDeviceList(self._PATH_LOCAL)
+        )
+        self._SELECTABLE_TRANSLATION_COMPUTE_DEVICE_LIST = (
+            list(self._SELECTABLE_COMPUTE_DEVICE_LIST) + getTranslationVulkanComputeDeviceList(self._PATH_LOCAL)
         )
         self._COMPUTE_MODE = "cuda" if any(
             device.get("device") == "cuda" for device in self._SELECTABLE_COMPUTE_DEVICE_LIST

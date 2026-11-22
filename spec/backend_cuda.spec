@@ -8,6 +8,11 @@ _use_upx = os.environ.get("VRCT_PYINSTALLER_UPX") == "1"
 # whisper.cpp (Vulkan) runtime, see spec/backend.spec.
 _whisper_cpp_bin = os.path.join(SPECPATH, '..', 'tools', 'whisper_cpp', 'bin')
 _whisper_cpp_datas = [(_whisper_cpp_bin, 'whisper_cpp/')] if os.path.isfile(os.path.join(_whisper_cpp_bin, 'whisper-server.exe')) else []
+# llama.cpp (Vulkan) runtime for the local AI translation engine's GGUF
+# (TranslateGemma) weights. Optional: built by
+# tools/llama_cpp/build_llama_cpp_vulkan.ps1.
+_llama_cpp_bin = os.path.join(SPECPATH, '..', 'tools', 'llama_cpp', 'bin')
+_llama_cpp_datas = [(_llama_cpp_bin, 'llama_cpp/')] if os.path.isfile(os.path.join(_llama_cpp_bin, 'llama-server.exe')) else []
 
 
 a = Analysis(
@@ -25,7 +30,7 @@ a = Analysis(
         ('./../.venv_cuda/Lib/site-packages/faster_whisper', 'faster_whisper/'),
         ('./../.venv_cuda/Lib/site-packages/hf_xet', 'hf_xet/'),
         ('./../.venv_cuda/Lib/site-packages/rapidocr', 'rapidocr/'),
-        ] + _whisper_cpp_datas,
+        ] + _whisper_cpp_datas + _llama_cpp_datas,
     # nvidia.cublas / nvidia.cudnn は ctranslate2 が GPU 実行時に
     # LoadLibrary で遅延ロードするDLLの提供元で、Python からは import
     # されないので依存解析に掛からない。ここで明示して

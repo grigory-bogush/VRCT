@@ -1,7 +1,8 @@
-name: Build VRCT (whisper.cpp Vulkan)
+name: Build VRCT (whisper.cpp / llama.cpp Vulkan)
 
-# Unsigned test build of the CPU edition with the whisper.cpp Vulkan runtime
-# bundled, so the local Whisper engine can run on AMD/Intel GPUs.
+# Unsigned test build of the CPU edition with the whisper.cpp and llama.cpp
+# Vulkan runtimes bundled, so local Whisper transcription and the local AI
+# translation engine (TranslateGemma GGUF weights) can run on AMD/Intel GPUs.
 # Not a release: no version/channel checks, no telemetry keys (telemetry is
 # disabled without them), no Hugging Face / GitHub Release upload.
 
@@ -16,6 +17,7 @@ on:
       - 'src-tauri/**'
       - 'spec/**'
       - 'tools/whisper_cpp/**'
+      - 'tools/llama_cpp/**'
       - 'requirements*.txt'
       - 'package*.json'
       - '.github/workflows/build-whisper-cpp-vulkan.yml'
@@ -57,9 +59,45 @@ jobs:
           path: tools/whisper_cpp/bin
           if-no-files-found: error
 
+  llama-server:
+    name: llama-server.exe (Vulkan)
+    runs-on: windows-latest
+    env:
+      VULKAN_VERSION: 1.4.357.0
+      LLAMA_CPP_VERSION: b12359
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache llama-server build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: tools/llama_cpp/bin
+          key: llama-server-vulkan-${{ env.LLAMA_CPP_VERSION }}-${{ env.VULKAN_VERSION }}-${{ hashFiles('tools/llama_cpp/build_llama_cpp_vulkan.ps1') }}
+
+      - name: Install Vulkan SDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
+
+      - name: Build llama-server.exe
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: tools\llama_cpp\build_llama_cpp_vulkan.ps1 -Version $env:LLAMA_CPP_VERSION
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-server-vulkan
+          path: tools/llama_cpp/bin
+          if-no-files-found: error
+
   vrct:
-    name: VRCT (CPU + whisper.cpp Vulkan)
-    needs: whisper-server
+    name: VRCT (CPU + whisper.cpp / llama.cpp Vulkan)
+    needs: [whisper-server, llama-server]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +106,11 @@ jobs:
         with:
           name: whisper-server-vulkan
           path: tools/whisper_cpp/bin
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: llama-server-vulkan
+          path: tools/llama_cpp/bin
 
       - uses: actions/setup-node@v4
         with:
@@ -100,7 +143,7 @@ jobs:
         shell: cmd
         run: |
           call .venv\Scripts\activate
-          python -m pytest -q src-python/test/test_transcription_whisper_cpp.py src-python/test/test_controller_whisper_cpp_device.py
+          python -m pytest -q src-python/test/test_transcription_whisper_cpp.py src-python/test/test_controller_whisper_cpp_device.py src-python/test/test_translation_llama_cpp.py
 
       # NOTICE.md: the chat-bubble OCR model may be used while developing and
       # testing a fork, but must not be shipped in a fork's own release. Keep
@@ -135,7 +178,7 @@ jobs:
           $zip = [IO.Compression.ZipFile]::OpenRead("VRCT_vulkan.zip")
           $names = $zip.Entries | ForEach-Object { $_.FullName -replace '\\', '/' }
           $zip.Dispose()
-          foreach ($need in 'VRCT.exe', 'VRCT-sidecar.exe', '_internal/whisper_cpp/whisper-server.exe') {
+          foreach ($need in 'VRCT.exe', 'VRCT-sidecar.exe', '_internal/whisper_cpp/whisper-server.exe', '_internal/llama_cpp/llama-server.exe') {
             if ($names -notcontains $need) { Write-Host "::error::$need missing from VRCT_vulkan.zip"; exit 1 }
           }
           Write-Host "VRCT_vulkan.zip OK ($($names.Count) files)"

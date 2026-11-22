@@ -589,6 +589,76 @@ CTranslate2:
   nllb-200-distilled-600M-ct2-int8:
     source: *nllb_langs
     target: *nllb_langs
+  # GGUF weights run by llama.cpp on "(Vulkan)" GPUs
+  # (models/translation/translation_llama_cpp.py). Codes go into
+  # TranslateGemma's prompt as "<English name> (<code>)".
+  translategemma-4b-it-Q4_K_M:
+    source: &translategemma_langs
+      Afrikaans: af
+      Arabic: ar
+      Armenian: hy
+      Azerbaijani: az
+      Belarusian: be
+      Bosnian: bs
+      Bulgarian: bg
+      Catalan: ca
+      Chinese Simplified: zh
+      Chinese Traditional: zh-TW
+      Croatian: hr
+      Czech: cs
+      Danish: da
+      Dutch: nl
+      English: en
+      Estonian: et
+      Finnish: fi
+      French: fr
+      Galician: gl
+      German: de
+      Greek: el
+      Hebrew: he
+      Hindi: hi
+      Hungarian: hu
+      Icelandic: is
+      Indonesian: id
+      Italian: it
+      Japanese: ja
+      Kannada: kn
+      Kazakh: kk
+      Korean: ko
+      Latvian: lv
+      Lithuanian: lt
+      Macedonian: mk
+      Malay: ms
+      Marathi: mr
+      Maori: mi
+      Nepali: ne
+      Norwegian: "no"
+      Persian: fa
+      Polish: pl
+      Portuguese: pt
+      Romanian: ro
+      Russian: ru
+      Serbian: sr
+      Slovak: sk
+      Slovenian: sl
+      Spanish: es
+      Swahili: sw
+      Swedish: sv
+      Tagalog: tl
+      Tamil: ta
+      Thai: th
+      Turkish: tr
+      Ukrainian: uk
+      Urdu: ur
+      Vietnamese: vi
+      Welsh: cy
+    target: *translategemma_langs
+  translategemma-4b-it-Q8_0:
+    source: *translategemma_langs
+    target: *translategemma_langs
+  translategemma-12b-it-Q4_K_M:
+    source: *translategemma_langs
+    target: *translategemma_langs
 
 Plamo_API:
   source: &plamo_langs

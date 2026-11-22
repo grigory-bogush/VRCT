@@ -15,6 +15,18 @@ except Exception:
 from utils import errorLogging, getBestComputeType
 
 try:
+    from models.translation.translation_llama_cpp import (
+        LlamaCppTranslator,
+        acquireLlamaCppServer,
+        isLlamaCppWeight,
+    )
+except Exception:  # pragma: no cover - optional runtime
+    LlamaCppTranslator = None  # type: ignore
+
+    def isLlamaCppWeight(weight_type: str) -> bool:  # type: ignore
+        return False
+
+try:
     # GPL の translators から、MIT 互換の自前実装に置き換えた
     # (translator_engines)。Bing の認証情報パースはそちらに内蔵済み。
     # Rust 製のビルド済み拡張 (src-python/translator_engines.pyd) を同梱している。
@@ -134,6 +146,9 @@ class Translator:
         self.ctranslate2_translator: Any = None
         self.ctranslate2_tokenizer: Any = None
         self.is_loaded_ctranslate2_model: bool = False
+        # Set instead of ctranslate2_translator when the selected weight is a
+        # GGUF (llama.cpp, Vulkan GPU) one; see translation_llama_cpp.py.
+        self.llama_cpp_translator: Any = None
         self.is_changed_translator_parameters: bool = False
         # ctranslate2_translator/ctranslate2_tokenizer は mic/speaker の
         # _print_transcript スレッドと mainloop ワーカー (チャット送信) から
@@ -452,11 +467,27 @@ class Translator:
         This sets internal translator/tokenizer objects and flips
         ``is_loaded_ctranslate2_model`` on success.
         """
+        if isLlamaCppWeight(model_type):
+            # GGUF weight (TranslateGemma) on a "(Vulkan)" GPU through
+            # llama-server; see translation_llama_cpp.py. The controller keeps
+            # weight and device compatible, so the device is always Vulkan here.
+            if device != "vulkan":
+                raise RuntimeError(f"{model_type} needs a Vulkan GPU compute device, got {device!r}")
+            with self._ctranslate2_lock:
+                self.is_loaded_ctranslate2_model = False
+                server = acquireLlamaCppServer(path, model_type, device_index)
+                self.llama_cpp_translator = LlamaCppTranslator(server)
+                self.ctranslate2_translator = None
+                self.ctranslate2_tokenizer = None
+                self.is_loaded_ctranslate2_model = True
+            return
+
         if ctranslate2 is None or transformers is None:
             return
 
         with self._ctranslate2_lock:
             self.is_loaded_ctranslate2_model = False
+            self.llama_cpp_translator = None
             directory_name = ctranslate2_weights[model_type]["directory_name"]
             tokenizer = ctranslate2_weights[model_type]["tokenizer"]
             weight_path = os_path.join(path, "weights", "ctranslate2", directory_name)
@@ -496,7 +527,15 @@ class Translator:
         """
         result: Any = False
         with self._ctranslate2_lock:
-            if self.is_loaded_ctranslate2_model is True:
+            if self.is_loaded_ctranslate2_model is True and isLlamaCppWeight(weight_type):
+                if self.llama_cpp_translator is None:
+                    return False
+                try:
+                    result = self.llama_cpp_translator.translate(message, source_language, target_language) or False
+                except Exception:
+                    errorLogging()
+                    result = False
+            elif self.is_loaded_ctranslate2_model is True:
                 try:
                     self.ctranslate2_tokenizer.src_lang = source_language
                     source = self.ctranslate2_tokenizer.convert_ids_to_tokens(self.ctranslate2_tokenizer.encode(message))

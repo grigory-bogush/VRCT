@@ -110,6 +110,12 @@ run_mapping = {
     "selectable_language_list":"/run/selectable_language_list",
 
     "selected_translation_compute_type":"/run/selected_translation_compute_type",
+    # Pushed when the local AI engine's weight/device were changed to keep
+    # them compatible (GGUF weights need a "(Vulkan)" device, CTranslate2
+    # weights a CPU/CUDA one).
+    "selected_translation_compute_device":"/get/data/selected_translation_compute_device",
+    "selected_ctranslate2_weight_type":"/get/data/selected_ctranslate2_weight_type",
+    "selectable_ctranslate2_weight_type_dict":"/get/data/selectable_ctranslate2_weight_type_dict",
     "selected_transcription_compute_type":"/run/selected_transcription_compute_type",
 
     "selectable_plamo_model_list":"/run/selectable_plamo_model_list",
@@ -291,7 +297,7 @@ mapping = {
 
     # Compute device
     "/get/data/compute_mode": {"status": True, "variable":controller.getComputeMode},
-    "/get/data/selectable_translation_compute_device_list": {"status": True, "variable":controller.getComputeDeviceList},
+    "/get/data/selectable_translation_compute_device_list": {"status": True, "variable":controller.getTranslationComputeDeviceList},
     "/get/data/selected_translation_compute_device": {"status": True, "variable":controller.getSelectedTranslationComputeDevice},
     "/set/data/selected_translation_compute_device": {"status": True, "variable":controller.setSelectedTranslationComputeDevice},
     "/get/data/selectable_transcription_compute_device_list": {"status": True, "variable":controller.getTranscriptionComputeDeviceList},

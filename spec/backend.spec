@@ -14,6 +14,11 @@ _use_upx = os.environ.get("VRCT_PYINSTALLER_UPX") == "1"
 # absent the build still succeeds and "(Vulkan)" devices simply don't appear.
 _whisper_cpp_bin = os.path.join(SPECPATH, '..', 'tools', 'whisper_cpp', 'bin')
 _whisper_cpp_datas = [(_whisper_cpp_bin, 'whisper_cpp/')] if os.path.isfile(os.path.join(_whisper_cpp_bin, 'whisper-server.exe')) else []
+# llama.cpp (Vulkan) runtime for the local AI translation engine's GGUF
+# (TranslateGemma) weights. Optional: built by
+# tools/llama_cpp/build_llama_cpp_vulkan.ps1.
+_llama_cpp_bin = os.path.join(SPECPATH, '..', 'tools', 'llama_cpp', 'bin')
+_llama_cpp_datas = [(_llama_cpp_bin, 'llama_cpp/')] if os.path.isfile(os.path.join(_llama_cpp_bin, 'llama-server.exe')) else []
 
 
 a = Analysis(
@@ -31,7 +36,7 @@ a = Analysis(
         ('./../.venv/Lib/site-packages/faster_whisper', 'faster_whisper/'),
         ('./../.venv/Lib/site-packages/hf_xet', 'hf_xet/'),
         ('./../.venv/Lib/site-packages/rapidocr', 'rapidocr/'),
-        ] + _whisper_cpp_datas,
+        ] + _whisper_cpp_datas + _llama_cpp_datas,
     hiddenimports=['telemetry_keys', 'faster_whisper.vad', 'models.transcription.audio_pipeline', 'rapidocr', 'cv2', 'models.ocr', 'windows_capture'],
     hookspath=[],
     hooksconfig={},

@@ -82,3 +82,9 @@ src-python/telemetry_keys.py
 /tools/whisper_cpp/src/
 /tools/whisper_cpp/build/
 /tools/whisper_cpp/bin/
+
+# llama.cpp (Vulkan) runtime: built by tools/llama_cpp/build_llama_cpp_vulkan.ps1
+/tools/llama_cpp/src/
+/tools/llama_cpp/build/
+/tools/llama_cpp/bin/
+/tools/llama_cpp/.src-version
